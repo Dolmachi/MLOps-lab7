@@ -1,4 +1,4 @@
-# MLOps Lab 6
+# MLOps Lab 7
 
 ### Config Spark
 #### Ресурсы
