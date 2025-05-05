@@ -1,17 +1,23 @@
 services:
   main:
-    build: .
+    build:
+      context: ./src/main
+      dockerfile: Dockerfile
     image: main-image
     container_name: main-container
+    environment:
+      - VITRINE_PATH=/vitrine/products_mart.parquet
+    volumes:
+      - vitrine:/vitrine
     networks:
     - app-network
     depends_on:
-      mongodb:
-        condition: service_healthy
+      datamart:
+        condition: service_completed_successfully
 
   datamart:
     build:
-      context: ./datamart
+      context: ./src/datamart
       dockerfile: Dockerfile
     image: datamart-image
     container_name: datamart-container
