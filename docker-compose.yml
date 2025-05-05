@@ -9,6 +9,20 @@ services:
       mongodb:
         condition: service_healthy
 
+  datamart:
+    build:
+      context: ./datamart
+      dockerfile: Dockerfile
+    image: datamart-image
+    container_name: datamart-container
+    volumes:
+      - vitrine:/vitrine
+    networks:
+    - app-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
   mongodb:
     image: mongo
     container_name: mongodb-container
@@ -31,3 +45,6 @@ services:
 networks:
   app-network:
     driver: bridge
+
+volumes:
+  vitrine: {} 

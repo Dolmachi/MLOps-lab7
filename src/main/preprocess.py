@@ -2,14 +2,14 @@ import os
 import shutil
 import configparser
 from pathlib import Path
-from logger import Logger
+from app.logger import Logger
 from functools import reduce
 from pyspark import SparkConf
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, expr, when
 
 
-root_dir = Path(__file__).parent.parent
+root_dir = Path(__file__).parent.parent.parent
 CONFIG_PATH = str(root_dir / 'config.ini')
 DATA_PATH = str(root_dir / 'data' / 'products.csv')
 OUTPUT_PATH = str(root_dir / 'data' / 'processed_products.csv')

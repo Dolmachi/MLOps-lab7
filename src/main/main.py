@@ -1,6 +1,6 @@
 import os
-from logger import Logger
-from predict import Predictor
+from app.logger import Logger
+from app.predict import Predictor
 from pyspark.sql import DataFrame
 
 
