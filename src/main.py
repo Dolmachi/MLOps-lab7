@@ -1,6 +1,10 @@
+import os
 from logger import Logger
 from predict import Predictor
 from pyspark.sql import DataFrame
+
+
+VITRINE_PATH = os.getenv("VITRINE_PATH", "/vitrine/products_mart.parquet")
 
 
 class InferenceJob:
@@ -10,7 +14,7 @@ class InferenceJob:
 
     def run(self):
         # Считываем данные
-        df = self.read_from_mongo()
+        df = self.pred.spark.read.parquet(VITRINE_PATH)
         self.log.info(f"Источник: {df.count():,} документов")
         
         # Предсказываем и записываем в другую коллекцию
@@ -19,16 +23,6 @@ class InferenceJob:
         self.log.info("Предсказания сохранены!")
 
         self.pred.stop()
-
-    def read_from_mongo(self):
-        """Загружаем коллекцию `products` через Spark-коннектор"""
-        return (
-            self.pred.spark.read
-            .format("mongodb")
-            .option("database",   "products_database")
-            .option("collection", "products")
-            .load()
-        )
 
     def write_to_mongo(self, df: DataFrame):
         """Пишем в новую коллекцию, чтобы не трогать оригинальные документы"""
