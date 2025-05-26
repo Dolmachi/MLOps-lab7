@@ -1,13 +1,13 @@
 import configparser
 from pathlib import Path
-from app.logger import Logger
+from logger import Logger
 import pyspark
 from pyspark import SparkConf
 from pyspark.ml import PipelineModel
 from pyspark.sql import SparkSession
 
 
-root_dir = Path(__file__).parent.parent.parent
+root_dir = Path(__file__).parent.parent
 CONFIG_PATH = str(root_dir / 'config.ini')
 DATA_PATH = str(root_dir / 'data' / 'processed_products.csv')
 MODEL_PATH  = str(root_dir / 'model')

@@ -1,28 +1,8 @@
 services:
   main:
-    build:
-      context: ./src/main
-      dockerfile: Dockerfile
+    build: .
     image: main-image
     container_name: main-container
-    environment:
-      - VITRINE_PATH=/vitrine/products_mart.parquet
-    volumes:
-      - vitrine:/vitrine
-    networks:
-    - app-network
-    depends_on:
-      datamart:
-        condition: service_completed_successfully
-
-  datamart:
-    build:
-      context: ./src/datamart
-      dockerfile: Dockerfile
-    image: datamart-image
-    container_name: datamart-container
-    volumes:
-      - vitrine:/vitrine
     networks:
     - app-network
     depends_on:
@@ -51,6 +31,3 @@ services:
 networks:
   app-network:
     driver: bridge
-
-volumes:
-  vitrine: {} 
