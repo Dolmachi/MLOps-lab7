@@ -3,3 +3,4 @@ pyspark==3.4.3
 pymongo==4.8.0
 pandas==2.2.3
 setuptools>=69
+requests==2.32.3

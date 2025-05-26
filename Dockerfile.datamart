@@ -1,0 +1,17 @@
+FROM openjdk:17-jdk
+
+RUN apt-get update && apt-get install -y curl
+
+# Установка sbt
+RUN curl -L https://github.com/sbt/sbt/releases/download/v1.9.0/sbt-1.9.0.tgz | tar -xz -C /usr/local && \
+    ln -s /usr/local/sbt/bin/sbt /usr/local/bin/sbt
+
+WORKDIR /app
+
+# Копируем проект Scala
+COPY datamart /app
+
+# Сборка проекта
+RUN sbt assembly
+
+CMD ["java", "-jar", "target/scala-2.12/DataMart-assembly-1.0.jar"]

@@ -8,7 +8,23 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
+      datamart:
+        condition: service_started
 
+  datamart:
+    build:
+      context: .
+      dockerfile: Dockerfile.datamart
+    image: datamart-image
+    container_name: datamart-container
+    networks:
+    - app-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    ports:
+    - "8080:8080"
+  
   mongodb:
     image: mongo
     container_name: mongodb-container

@@ -1,45 +1,42 @@
+import json
+import requests
 from logger import Logger
 from predict import Predictor
 from pyspark.sql import DataFrame
-
 
 class InferenceJob:
     def __init__(self):
         self.log = Logger().get_logger(__name__)
         self.pred = Predictor()
+        self.datamart_url = "http://datamart:8080/api"
 
     def run(self):
-        # Считываем данные
-        df = self.read_from_mongo()
+        # Получаем предобработанные данные от витрины
+        df = self.get_from_datamart()
         self.log.info(f"Источник: {df.count():,} документов")
-        
-        # Предсказываем и записываем в другую коллекцию
+
+        # Делаем предсказание
         df_pred = self.pred.predict(df)
-        self.write_to_mongo(df_pred.select("_id", "cluster"))
-        self.log.info("Предсказания сохранены!")
+        
+        # Отправляем предсказания витрине
+        self.send_to_datamart(df_pred)
+        self.log.info("Предсказания отправлены витрине!")
 
         self.pred.stop()
 
-    def read_from_mongo(self):
-        """Загружаем коллекцию `products` через Spark-коннектор"""
-        return (
-            self.pred.spark.read
-            .format("mongodb")
-            .option("database",   "products_database")
-            .option("collection", "products")
-            .load()
-        )
+    def get_from_datamart(self) -> DataFrame:
+        """Получаем предобработанные данные через API витрины"""
+        response = requests.get(f"{self.datamart_url}/processed-data")
+        response.raise_for_status()
+        data = response.json()
+        return self.pred.spark.read.json(self.pred.spark.sparkContext.parallelize([json.dumps(data)]))
 
-    def write_to_mongo(self, df: DataFrame):
-        """Пишем в новую коллекцию, чтобы не трогать оригинальные документы"""
-        (
-            df.write
-            .format("mongodb")
-            .mode("append")
-            .option("database",   "products_database")
-            .option("collection", "products_clusters")
-            .save()
-        )
+    def send_to_datamart(self, df: DataFrame):
+        """Отправляем предсказания витрине через API"""
+        predictions = df.select("_id", "cluster").collect()
+        payload = [{"_id": row["_id"], "cluster": row["cluster"]} for row in predictions]
+        response = requests.post(f"{self.datamart_url}/predictions", json=payload)
+        response.raise_for_status()
 
 if __name__ == "__main__":
     InferenceJob().run()
