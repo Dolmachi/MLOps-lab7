@@ -12,3 +12,17 @@ libraryDependencies ++= Seq(
   "de.heikoseeberger" %% "akka-http-circe" % "1.39.2",
   "io.circe" %% "circe-generic" % "0.14.6"
 )
+
+// Принудительно указываем версию scala-parser-combinators
+dependencyOverrides += "org.scala-lang.modules" %% "scala-parser-combinators" % "2.1.1"
+
+// Стратегия слияния для sbt-assembly
+assemblyMergeStrategy in assembly := {
+  case PathList("META-INF", xs @ _*) => MergeStrategy.discard // Игнорируем все файлы в META-INF
+  case "reference.conf" => MergeStrategy.concat // Конкатенируем файлы reference.conf
+  case "application.conf" => MergeStrategy.concat // Конкатенируем application.conf
+  case x if x.endsWith(".proto") => MergeStrategy.first // Берем первый файл для .proto
+  case x if x.endsWith(".properties") => MergeStrategy.first // Берем первый файл для .properties
+  case x if x.endsWith(".class") => MergeStrategy.first // Берем первый файл для .class
+  case x => MergeStrategy.first // Для всех остальных файлов берем первый
+}
