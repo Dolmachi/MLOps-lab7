@@ -18,6 +18,11 @@ libraryDependencies ++= Seq(
 
 dependencyOverrides += "org.scala-lang.modules" %% "scala-parser-combinators" % "2.1.1"
 
+mainClass in Compile := Some("DataMartServer")
+
+assembly / assemblyOption := (assembly / assemblyOption).value.copy(includeScala = false, includeDependency = true)
+assembly / fullClasspath := (Compile / fullClasspath).value
+
 assemblyMergeStrategy in assembly := {
   case PathList("META-INF", xs @ _*) => MergeStrategy.discard
   case "reference.conf" => MergeStrategy.concat
@@ -26,8 +31,6 @@ assemblyMergeStrategy in assembly := {
   case x if x.endsWith(".properties") => MergeStrategy.first
   case x if x.endsWith(".class") => MergeStrategy.first
   case PathList("org", "slf4j", "impl", xs @ _*) => MergeStrategy.discard
+  case PathList("org", "apache", "log4j", xs @ _*) if xs.contains("Log4j2Plugins.dat") => MergeStrategy.first
   case x => MergeStrategy.first
 }
-
-// Укажем, что зависимости должны включаться в JAR
-assembly / assemblyShadeRules := Seq()

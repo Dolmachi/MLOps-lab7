@@ -1,6 +1,6 @@
 FROM openjdk:17-jdk-slim
 
-RUN apt-get update && apt-get install -y curl
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
 # Установка sbt
 RUN curl -L https://github.com/sbt/sbt/releases/download/v1.9.0/sbt-1.9.0.tgz | tar -xz -C /usr/local && \
@@ -17,5 +17,5 @@ ENV SBT_OPTS="-Xms512m -Xmx2048m -XX:MaxMetaspaceSize=512m"
 # Сборка проекта
 RUN sbt assembly
 
-# Команда запуска с явным указанием параметров JVM
-CMD ["java", "--add-exports=java.base/sun.nio.ch=ALL-UNNAMED", "--add-opens=java.base/java.nio=ALL-UNNAMED", "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED", "-jar", "target/scala-2.12/DataMart-assembly-1.0.jar"]
+# Команда запуска с явным указанием classpath
+CMD ["java", "--add-exports=java.base/sun.nio.ch=ALL-UNNAMED", "--add-opens=java.base/java.nio=ALL-UNNAMED", "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED", "-cp", "target/scala-2.12/DataMart-assembly-1.0.jar", "DataMartServer"]
