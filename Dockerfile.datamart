@@ -17,4 +17,5 @@ ENV SBT_OPTS="-Xms512m -Xmx2048m -XX:MaxMetaspaceSize=512m"
 # Сборка проекта
 RUN sbt assembly
 
-CMD ["java", "-jar", "target/scala-2.12/DataMart-assembly-1.0.jar"]
+# Команда запуска с явным указанием параметров JVM
+CMD ["java", "--add-exports=java.base/sun.nio.ch=ALL-UNNAMED", "--add-opens=java.base/java.nio=ALL-UNNAMED", "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED", "-jar", "target/scala-2.12/DataMart-assembly-1.0.jar"]
