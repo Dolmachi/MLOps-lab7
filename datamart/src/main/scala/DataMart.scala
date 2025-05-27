@@ -14,6 +14,7 @@ object DataMart {
     .config("spark.executor.memory", "8g")
     .config("spark.driver.memory", "4g")
     .config("spark.executor.cores", "4")
+    .config("spark.jars.packages", "org.mongodb.spark:mongo-spark-connector_2.12:10.2.0")
     .getOrCreate()
 
   def getRawData: DataFrame = {

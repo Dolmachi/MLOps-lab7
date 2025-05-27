@@ -5,25 +5,22 @@ scalaVersion := "2.12.18"
 libraryDependencies ++= Seq(
   "org.apache.spark" %% "spark-sql" % "3.4.3" exclude("org.slf4j", "slf4j-simple") exclude("org.slf4j", "slf4j-log4j12"),
   "org.apache.spark" %% "spark-mllib" % "3.4.3" exclude("org.slf4j", "slf4j-simple") exclude("org.slf4j", "slf4j-log4j12"),
-  "org.mongodb.spark" %% "mongo-spark-connector" % "10.2.0",
-  "org.apache.logging.log4j" % "log4j-core" % "2.19.0",
-  "org.apache.logging.log4j" % "log4j-slf4j-impl" % "2.19.0",
-  "org.slf4j" % "slf4j-api" % "2.0.6",
+  "org.mongodb.spark" %% "mongo-spark-connector" % "10.3.0",
+  "org.apache.logging.log4j" % "log4j-core" % "2.24.1",
+  "org.apache.logging.log4j" % "log4j-slf4j2-impl" % "2.24.1",
+  "org.slf4j" % "slf4j-api" % "2.0.16",
   "com.typesafe.akka" %% "akka-http" % "10.2.10" exclude("org.slf4j", "slf4j-simple") exclude("org.slf4j", "slf4j-log4j12"),
   "com.typesafe.akka" %% "akka-stream" % "2.6.20" exclude("org.slf4j", "slf4j-simple") exclude("org.slf4j", "slf4j-log4j12"),
   "com.typesafe.akka" %% "akka-actor-typed" % "2.6.20" exclude("org.slf4j", "slf4j-simple") exclude("org.slf4j", "slf4j-log4j12"),
   "de.heikoseeberger" %% "akka-http-circe" % "1.39.2",
-  "io.circe" %% "circe-generic" % "0.14.6"
+  "io.circe" %% "circe-generic" % "0.14.9"
 )
 
-dependencyOverrides += "org.scala-lang.modules" %% "scala-parser-combinators" % "2.1.1"
+dependencyOverrides += "org.scala-lang.modules" %% "scala-parser-combinators" % "2.4.0"
 
 mainClass in Compile := Some("DataMartServer")
 
-assembly / assemblyOption := (assembly / assemblyOption).value.copy(includeScala = false, includeDependency = true)
-assembly / fullClasspath := (Compile / fullClasspath).value
-
-assemblyMergeStrategy in assembly := {
+assembly / assemblyMergeStrategy := {
   case PathList("META-INF", xs @ _*) => MergeStrategy.discard
   case "reference.conf" => MergeStrategy.concat
   case "application.conf" => MergeStrategy.concat
@@ -34,3 +31,9 @@ assemblyMergeStrategy in assembly := {
   case PathList("org", "apache", "log4j", xs @ _*) if xs.contains("Log4j2Plugins.dat") => MergeStrategy.first
   case x => MergeStrategy.first
 }
+
+assembly / assemblyOption := (assembly / assemblyOption).value
+  .withIncludeScala(true)
+  .withIncludeDependency(true)
+
+assembly / fullClasspath := (Compile / fullClasspath).value

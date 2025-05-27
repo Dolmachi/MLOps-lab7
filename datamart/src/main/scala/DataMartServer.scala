@@ -35,6 +35,11 @@ object DataMartServer {
   // Маршруты API
   val route =
     pathPrefix("api") {
+      path("health") {  // Новый маршрут для health check
+        get {
+          complete(StatusCodes.OK, """{"status": "OK"}""")
+        }
+      } ~
       path("processed-data") {
         get {
           // Возвращаем предобработанные данные в формате JSON
