@@ -10,9 +10,10 @@ object DataMart {
   val spark: SparkSession = SparkSession.builder()
     .appName("DataMart")
     .master("local[*]")
-    .config("spark.jars.packages",
-            "org.mongodb.spark:mongo-spark-connector_2.12:10.3.0")
-    .config("spark.mongodb.read.partitioner", "MongoPaginateBySizePartitioner")
+    .config(
+      "spark.mongodb.read.partitioner",
+      "com.mongodb.spark.sql.connector.read.partitioner.MongoPaginateBySizePartitioner"
+    )
     .config("spark.mongodb.read.partitionerOptions.numberOfPartitions", "8")
     .config("spark.mongodb.read.connection.uri",
             "mongodb://user:12345@mongodb:27017/products_database?authSource=admin")
