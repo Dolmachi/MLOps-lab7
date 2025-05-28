@@ -6,15 +6,21 @@ import org.apache.logging.log4j.{LogManager, Logger}
 object DataMart {
   private val logger: Logger = LogManager.getLogger(getClass)
 
+  // ── SparkSession с правильным пакетом коннектора ────────────────
   val spark: SparkSession = SparkSession.builder()
     .appName("DataMart")
     .master("local[*]")
-    .config("spark.mongodb.read.connection.uri", "mongodb://user:12345@mongodb:27017/products_database?authSource=admin")
-    .config("spark.mongodb.write.connection.uri", "mongodb://user:12345@mongodb:27017/products_database?authSource=admin")
+    .config("spark.jars.packages",
+            "org.mongodb.spark:mongo-spark-connector_2.12:10.3.0")
+    .config("spark.mongodb.read.partitioner", "MongoPaginateBySizePartitioner")
+    .config("spark.mongodb.read.partitionerOptions.numberOfPartitions", "8")
+    .config("spark.mongodb.read.connection.uri",
+            "mongodb://user:12345@mongodb:27017/products_database?authSource=admin")
+    .config("spark.mongodb.write.connection.uri",
+            "mongodb://user:12345@mongodb:27017/products_database?authSource=admin")
     .config("spark.executor.memory", "8g")
-    .config("spark.driver.memory", "4g")
-    .config("spark.executor.cores", "4")
-    .config("spark.jars.packages", "org.mongodb.spark:mongo-spark-connector_2.12:10.2.0")
+    .config("spark.driver.memory",   "4g")
+    .config("spark.executor.cores",  "4")
     .getOrCreate()
 
   def getRawData: DataFrame = {
@@ -23,7 +29,7 @@ object DataMart {
       val df = spark.read
         .format("mongodb")
         .option("database", "products_database")
-        .option("collection", "products")
+        .option("collection", "products_raw")
         .load()
       logger.info(s"Получено ${df.count()} строк из MongoDB")
       df
