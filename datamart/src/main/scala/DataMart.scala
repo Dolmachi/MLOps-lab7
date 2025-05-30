@@ -12,13 +12,13 @@ object DataMart {
     .master("local[*]")
     .config(
       "spark.mongodb.read.partitioner",
-      "com.mongodb.spark.sql.connector.read.partitioner.MongoPaginateBySizePartitioner"
+      "com.mongodb.spark.sql.connector.read.partitioner.PaginateBySizePartitioner"
     )
-    .config("spark.mongodb.read.partitionerOptions.numberOfPartitions", "8")
+    .config("spark.mongodb.read.partitionerOptions.partitionSizeMB", "64")
     .config("spark.mongodb.read.connection.uri",
-            "mongodb://user:12345@mongodb:27017/products_database?authSource=admin")
+          "mongodb://user:12345@mongodb:27017/products_database?authSource=admin")
     .config("spark.mongodb.write.connection.uri",
-            "mongodb://user:12345@mongodb:27017/products_database?authSource=admin")
+          "mongodb://user:12345@mongodb:27017/products_database?authSource=admin")
     .config("spark.executor.memory", "8g")
     .config("spark.driver.memory",   "4g")
     .config("spark.executor.cores",  "4")
