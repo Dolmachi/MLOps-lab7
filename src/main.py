@@ -25,11 +25,26 @@ class InferenceJob:
         self.pred.stop()
 
     def get_from_datamart(self) -> DataFrame:
-        """Получаем предобработанные данные через API витрины"""
-        response = requests.get(f"{self.datamart_url}/processed-data")
-        response.raise_for_status()
-        data = response.json()
-        return self.pred.spark.read.json(self.pred.spark.sparkContext.parallelize([json.dumps(data)]))
+        all_parts = []
+        offset, limit = 0, 10_000
+
+        while True:
+            url = f"{self.datamart_url}/processed-data?offset={offset}&limit={limit}"
+            r   = requests.get(url, stream=True)
+            r.raise_for_status()
+
+            # сервер шлёт полноценный JSON-массив
+            part = r.json()
+            if not part:
+                break
+
+            all_parts.extend(part)
+            offset += limit
+
+        # превращаем список json-строк в Spark-DF
+        rdd = self.pred.spark.sparkContext.parallelize(map(json.dumps, all_parts))
+        return self.pred.spark.read.json(rdd)
+
 
     def send_to_datamart(self, df: DataFrame):
         """Отправляем предсказания витрине через API"""

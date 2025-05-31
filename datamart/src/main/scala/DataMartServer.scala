@@ -1,85 +1,92 @@
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.model._
+import akka.http.scaladsl.server.Directives._
+import akka.stream.scaladsl.Source
+import akka.util.ByteString
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.generic.auto._
-import org.apache.spark.sql.DataFrame
 import org.apache.logging.log4j.{LogManager, Logger}
+import org.apache.spark.sql.{DataFrame, Column}
+import org.apache.spark.sql.functions.{col, monotonically_increasing_id}
+import scala.jdk.CollectionConverters._
+import akka.NotUsed
 
 case class Prediction(_id: String, cluster: Int)
 
 object DataMartServer {
+
   implicit val system = ActorSystem("DataMartServer")
-  implicit val executionContext = system.dispatcher
+  implicit val ec     = system.dispatcher
+  private val logger  = LogManager.getLogger(getClass)
 
-  // Логгер
-  private val logger: Logger = LogManager.getLogger(getClass)
+  /* ───── helpers ─────────────────────────────────────────────── */
 
-  // Получение предобработанных данных
-  def getProcessedData: DataFrame = {
-    try {
-      logger.info("Получение необработанных данных...")
-      val rawData = DataMart.getRawData
-      logger.info("Предобработка данных...")
-      val processedData = DataMart.preprocessData(rawData)
-      logger.info("Данные успешно предобработаны")
-      processedData
-    } catch {
-      case e: Exception =>
-        logger.error(s"Ошибка при обработке данных: ${e.getMessage}", e)
-        throw e
-    }
+  /** Потоково превращает DataFrame → JSON-массив `[row1,row2,…]` */
+  private def jsonStream(df: DataFrame): Source[ByteString, NotUsed] =
+    Source
+      .fromIterator(() => df.toJSON.toLocalIterator().asScala)
+      .map(ByteString(_))
+      .intersperse(ByteString("["), ByteString(","), ByteString("]"))
+
+  /** Берём «окно» данных без collect() */
+  private def processedSlice(offset: Long, limit: Int): DataFrame = {
+    val all = DataMart.preprocessData(DataMart.getRawData)
+    all
+      .withColumn("rn", monotonically_increasing_id())
+      .filter(col("rn") >= offset)
+      .limit(limit)
+      .drop("rn")
   }
 
-  // Маршруты API
+  /* ───── routes ──────────────────────────────────────────────── */
+
   val route =
     pathPrefix("api") {
-      path("health") {  // Новый маршрут для health check
-        get {
-          complete(StatusCodes.OK, """{"status": "OK"}""")
-        }
-      } ~
-      path("processed-data") {
-        get {
-          // Возвращаем предобработанные данные в формате JSON
-          try {
-            val df = getProcessedData
-            val json = df.toJSON.collect().mkString("[", ",", "]")
-            complete(HttpEntity(ContentTypes.`application/json`, json))
-          } catch {
-            case e: Exception =>
-              logger.error(s"Ошибка при формировании ответа: ${e.getMessage}", e)
-              complete(StatusCodes.InternalServerError, s"Ошибка сервера: ${e.getMessage}")
+      concat(
+
+        /* health-check */
+        path("health") {
+          get { complete("""{"status":"OK"}""") }
+        },
+
+        /* предобработанные данные */
+        path("processed-data") {
+          parameters("offset".as[Long].?(0L), "limit".as[Int].?(10000)) { (offset, limit) =>
+            get {
+              val slice  = processedSlice(offset, limit)
+              val entity = HttpEntity.Chunked.fromData(
+                              ContentTypes.`application/json`,
+                              jsonStream(slice)
+                           )
+              complete(entity)
+            }
+          }
+        },
+
+        /* приём предсказаний */
+        path("predictions") {
+          post {
+            entity(as[List[Prediction]]) { preds =>
+              val spark = DataMart.spark; import spark.implicits._
+              DataMart.savePredictions(preds.toDF())
+              complete(StatusCodes.OK, "Предсказания успешно сохранены")
+            }
           }
         }
-      } ~
-      path("predictions") {
-        post {
-          // Принимаем предсказания от модели
-          entity(as[List[Prediction]]) { predictions =>
-            val spark = DataMart.spark
-            import spark.implicits._
-            val predictionsDF = predictions.toDF()
-            DataMart.savePredictions(predictionsDF)
-            complete(StatusCodes.OK, "Предсказания успешно сохранены")
-          }
-        }
-      }
+      )
     }
 
-  def main(args: Array[String]): Unit = {
-    val bindingFuture = Http().newServerAt("0.0.0.0", 8080).bind(route)
+  /* ───── main ───────────────────────────────────────────────── */
 
-    println("Сервер запущен на http://0.0.0.0:8080/api")
+  def main(args: Array[String]): Unit = {
+    val binding = Http().newServerAt("0.0.0.0", 8080).bind(route)
+    println("⇢ DataMart-API запущен: http://0.0.0.0:8080/api")
 
     sys.addShutdownHook {
-      bindingFuture
-        .flatMap(_.unbind())
-        .onComplete(_ => {
-          DataMart.stop()
-          system.terminate()
-        })
+      binding.flatMap(_.unbind()).onComplete { _ =>
+        DataMart.stop(); system.terminate()
+      }
     }
   }
 }
