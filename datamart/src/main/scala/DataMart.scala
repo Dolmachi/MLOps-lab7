@@ -1,5 +1,6 @@
-import org.apache.spark.sql.{SparkSession, DataFrame}
-import org.apache.spark.sql.functions.{col, when, expr}
+import org.apache.spark.sql.{SparkSession, DataFrame, Column}
+import org.apache.spark.sql.types._
+import org.apache.spark.sql.functions._
 import com.mongodb.spark._
 import org.apache.logging.log4j.{LogManager, Logger}
 
@@ -15,6 +16,8 @@ object DataMart {
       "com.mongodb.spark.sql.connector.read.partitioner.PaginateBySizePartitioner"
     )
     .config("spark.mongodb.read.partitionerOptions.partitionSizeMB", "64")
+    .config("spark.mongodb.read.sql.pipeline.includeFiltersAndProjections", "false")
+    .config("spark.mongodb.read.pushdown.enabled", "false")
     .config("spark.mongodb.read.connection.uri",
           "mongodb://user:12345@mongodb:27017/products_database?authSource=admin")
     .config("spark.mongodb.write.connection.uri",
@@ -32,7 +35,6 @@ object DataMart {
         .option("database", "products_database")
         .option("collection", "products_raw")
         .load()
-      logger.info(s"Получено ${df.count()} строк из MongoDB")
       df
     } catch {
       case e: Exception =>
@@ -44,32 +46,41 @@ object DataMart {
   def preprocessData(rawDF: DataFrame): DataFrame = {
     try {
       logger.info("Начало предобработки данных...")
-      val nutrientColumns = rawDF.columns.slice(88, rawDF.columns.length)
-      logger.info(s"Выбраны столбцы: ${nutrientColumns.mkString(", ")}")
 
-      var processedDF = rawDF.select(nutrientColumns.map(col): _*)
-        .filter(!nutrientColumns.map(col(_).isNull).reduce(_ && _))
-      logger.info(s"После фильтрации: ${processedDF.count()} строк")
+      val nutrientCols = rawDF.columns.filter(_.endsWith("_100g"))
 
-      processedDF = processedDF.na.fill(0.0)
-      logger.info("Пропущенные значения заполнены нулями")
+      val casted = nutrientCols.foldLeft(rawDF) { (df, c) =>
+        df.withColumn(c, col(c).cast(DoubleType))
+      }
 
-      val medianExprs = nutrientColumns.map(c => expr(s"percentile_approx($c, 0.5)").alias(c))
-      val medians = processedDF.agg(medianExprs.head, medianExprs.tail: _*).collect()(0).toSeq
-      val medianMap = nutrientColumns.zip(medians).toMap
-      logger.info(s"Медианы: ${medianMap.toString()}")
+      var processed = casted
+        .select(nutrientCols.map(col): _*)
+        .na.drop("all", nutrientCols)
+        .na.fill(0.0)
 
-      nutrientColumns.foreach { c =>
-        processedDF = processedDF.withColumn(
+      val medianExprs: Seq[Column] =
+        nutrientCols.map(c => percentile_approx(col(c), lit(0.5), lit(10000)).alias(c))
+
+      val medianRow = processed.agg(medianExprs.head, medianExprs.tail: _*).first()
+
+      val medianMap: Map[String, Double] =
+        nutrientCols.zip(medianRow.toSeq.map {
+          case d: java.lang.Double => d.doubleValue() 
+          case _                   => 0.0               
+        }).toMap
+
+      nutrientCols.foreach { c =>
+        processed = processed.withColumn(
           c,
-          when(col(c) < 0.0 || col(c) > 1000.0, medianMap(c)).otherwise(col(c))
+          when(col(c) < 0.0 || col(c) > 1000.0, lit(medianMap(c))).otherwise(col(c))
         )
       }
+
       logger.info("Предобработка завершена")
-      processedDF
+      processed
     } catch {
       case e: Exception =>
-        logger.error(s"Ошибка при предобработке данных: ${e.getMessage}", e)
+        logger.error("Ошибка при предобработке данных", e)
         throw e
     }
   }
