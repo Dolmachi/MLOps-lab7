@@ -1,4 +1,5 @@
 import akka.actor.ActorSystem
+import com.typesafe.config.ConfigFactory
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.server.Directives._
@@ -17,16 +18,26 @@ case class Prediction(_id: String, cluster: Int)
 
 object DataMartServer {
 
-  implicit val system = ActorSystem("DataMartServer")
+  implicit val system = ActorSystem(
+    "DataMartServer",
+    ConfigFactory
+      .parseString("akka.http.server.request-timeout = 600s")
+      .withFallback(ConfigFactory.load())
+  )
   implicit val ec     = system.dispatcher
   private val logger  = LogManager.getLogger(getClass)
 
   /* ───── helpers ─────────────────────────────────────────────── */
 
-  private lazy val processedAll: DataFrame = {
-    val df = DataMart.preprocessData( DataMart.getRawData )
-    df.persist(StorageLevel.MEMORY_AND_DISK)      
-    df                                            
+  private val processedAll: DataFrame = {
+    val base = DataMart.preprocessData(DataMart.getRawData)
+      .withColumn("rn", monotonically_increasing_id())
+      .persist(StorageLevel.MEMORY_AND_DISK)
+
+    val n = base.count()
+    logger.info(s"Cached dataset, rows = $n")
+    
+    base
   }
 
   /** Потоково превращает DataFrame → JSON-массив `[row1,row2,…]` */
@@ -37,13 +48,10 @@ object DataMartServer {
       .intersperse(ByteString("["), ByteString(","), ByteString("]"))
 
   /** Берём «окно» данных без collect() */
-  private def processedSlice(offset: Long, limit: Int): DataFrame = {
+  private def processedSlice(offset: Long, limit: Int): DataFrame =
     processedAll
-      .withColumn("rn", monotonically_increasing_id())
-      .filter(col("rn") >= offset)
-      .limit(limit)
+      .filter(col("rn") >= offset && col("rn") < offset + limit)
       .drop("rn")
-  }
 
   /* ───── routes ──────────────────────────────────────────────── */
 
@@ -85,6 +93,9 @@ object DataMartServer {
   /* ───── main ───────────────────────────────────────────────── */
 
   def main(args: Array[String]): Unit = {
+    val n = processedAll.count()
+    println(s"⇢ Cached dataset, rows = $n")
+
     val binding = Http().newServerAt("0.0.0.0", 8080).bind(route)
     println("⇢ DataMart-API запущен: http://0.0.0.0:8080/api")
 

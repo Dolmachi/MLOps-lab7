@@ -33,7 +33,7 @@ class InferenceJob:
 
     def fetch_slice(self, offset: int, limit: int) -> DataFrame | None:
         url = f"{self.datamart_url}/processed-data?offset={offset}&limit={limit}"
-        r   = requests.get(url, timeout=120)
+        r   = requests.get(url, timeout=(10, 600))
         r.raise_for_status()
 
         data = r.json()
@@ -48,7 +48,7 @@ class InferenceJob:
             {"_id": row["_id"], "cluster": row["cluster"]}
             for row in df.select("_id", "cluster").toLocalIterator()
         ]
-        r = requests.post(f"{self.datamart_url}/predictions", json=payload, timeout=60)
+        r = requests.post(f"{self.datamart_url}/predictions", json=payload, timeout=(10, 600))
         r.raise_for_status()
 
 
