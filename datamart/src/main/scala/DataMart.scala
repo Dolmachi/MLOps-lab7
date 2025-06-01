@@ -6,6 +6,8 @@ import org.apache.logging.log4j.{LogManager, Logger}
 
 object DataMart {
   private val logger: Logger = LogManager.getLogger(getClass)
+  private val mongoUri =
+    "mongodb://user:12345@mongodb:27017/products_database?authSource=admin"
 
   // ── SparkSession с правильным пакетом коннектора ────────────────
   val spark: SparkSession = SparkSession.builder()
@@ -18,10 +20,7 @@ object DataMart {
     .config("spark.mongodb.read.partitionerOptions.partitionSizeMB", "64")
     .config("spark.mongodb.read.sql.pipeline.includeFiltersAndProjections", "false")
     .config("spark.mongodb.read.pushdown.enabled", "false")
-    .config("spark.mongodb.read.connection.uri",
-          "mongodb://user:12345@mongodb:27017/products_database?authSource=admin")
-    .config("spark.mongodb.write.connection.uri",
-          "mongodb://user:12345@mongodb:27017/products_database?authSource=admin")
+    .config("spark.mongodb.connection.uri", mongoUri)
     .config("spark.executor.memory", "8g")
     .config("spark.driver.memory",   "4g")
     .config("spark.executor.cores",  "4")
@@ -32,6 +31,7 @@ object DataMart {
       logger.info("Чтение данных из MongoDB: products_database.products")
       val df = spark.read
         .format("mongodb")
+        .option("uri", mongoUri)
         .option("database", "products_database")
         .option("collection", "products_raw")
         .load()
@@ -91,6 +91,7 @@ object DataMart {
       predictionsDF.write
         .format("mongodb")
         .mode("append")
+        .option("uri", mongoUri)
         .option("database", "products_database")
         .option("collection", "products_clusters")
         .save()

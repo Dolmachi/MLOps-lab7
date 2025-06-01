@@ -1,57 +1,56 @@
 import json
 import requests
-from logger import Logger
-from predict import Predictor
+from logger   import Logger
+from predict  import Predictor
 from pyspark.sql import DataFrame
+
 
 class InferenceJob:
     def __init__(self):
-        self.log = Logger().get_logger(__name__)
-        self.pred = Predictor()
+        self.log          = Logger().get_logger(__name__)
+        self.pred         = Predictor()
         self.datamart_url = "http://datamart:8080/api"
 
-    def run(self):
-        # Получаем предобработанные данные от витрины
-        df = self.get_from_datamart()
-        self.log.info(f"Источник: {df.count():,} документов")
+        self.limit  = 100000
+        self.offset = 0
 
-        # Делаем предсказание
-        df_pred = self.pred.predict(df)
-        
-        # Отправляем предсказания витрине
-        self.send_to_datamart(df_pred)
-        self.log.info("Предсказания отправлены витрине!")
+    def run(self):
+        batch = 0
+        while True:
+            df_slice = self.fetch_slice(self.offset, self.limit)
+            if df_slice is None:
+                break        
+            batch += 1
+            self.log.info(f"Принято {batch} порций")
+            
+            preds_df = self.pred.predict(df_slice)
+            self.send_to_datamart(preds_df)
+            self.offset += self.limit
+            self.log.info(f"Отправлено {batch} порций")
 
         self.pred.stop()
+        self.log.info("Работа завершена")
 
-    def get_from_datamart(self) -> DataFrame:
-        all_parts = []
-        offset, limit = 0, 10_000
+    def fetch_slice(self, offset: int, limit: int) -> DataFrame | None:
+        url = f"{self.datamart_url}/processed-data?offset={offset}&limit={limit}"
+        r   = requests.get(url, timeout=120)
+        r.raise_for_status()
 
-        while True:
-            url = f"{self.datamart_url}/processed-data?offset={offset}&limit={limit}"
-            r   = requests.get(url, stream=True)
-            r.raise_for_status()
+        data = r.json()
+        if not data:
+            return None
 
-            # сервер шлёт полноценный JSON-массив
-            part = r.json()
-            if not part:
-                break
-
-            all_parts.extend(part)
-            offset += limit
-
-        # превращаем список json-строк в Spark-DF
-        rdd = self.pred.spark.sparkContext.parallelize(map(json.dumps, all_parts))
+        rdd = self.pred.spark.sparkContext.parallelize(map(json.dumps, data))
         return self.pred.spark.read.json(rdd)
 
-
     def send_to_datamart(self, df: DataFrame):
-        """Отправляем предсказания витрине через API"""
-        predictions = df.select("_id", "cluster").collect()
-        payload = [{"_id": row["_id"], "cluster": row["cluster"]} for row in predictions]
-        response = requests.post(f"{self.datamart_url}/predictions", json=payload)
-        response.raise_for_status()
+        payload = [
+            {"_id": row["_id"], "cluster": row["cluster"]}
+            for row in df.select("_id", "cluster").toLocalIterator()
+        ]
+        r = requests.post(f"{self.datamart_url}/predictions", json=payload, timeout=60)
+        r.raise_for_status()
+
 
 if __name__ == "__main__":
     InferenceJob().run()

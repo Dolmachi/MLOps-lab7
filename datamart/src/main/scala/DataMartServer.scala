@@ -7,8 +7,9 @@ import akka.util.ByteString
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.generic.auto._
 import org.apache.logging.log4j.{LogManager, Logger}
-import org.apache.spark.sql.{DataFrame, Column}
+import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.functions.{col, monotonically_increasing_id}
+import org.apache.spark.storage.StorageLevel 
 import scala.jdk.CollectionConverters._
 import akka.NotUsed
 
@@ -22,6 +23,12 @@ object DataMartServer {
 
   /* ───── helpers ─────────────────────────────────────────────── */
 
+  private lazy val processedAll: DataFrame = {
+    val df = DataMart.preprocessData( DataMart.getRawData )
+    df.persist(StorageLevel.MEMORY_AND_DISK)      
+    df                                            
+  }
+
   /** Потоково превращает DataFrame → JSON-массив `[row1,row2,…]` */
   private def jsonStream(df: DataFrame): Source[ByteString, NotUsed] =
     Source
@@ -31,8 +38,7 @@ object DataMartServer {
 
   /** Берём «окно» данных без collect() */
   private def processedSlice(offset: Long, limit: Int): DataFrame = {
-    val all = DataMart.preprocessData(DataMart.getRawData)
-    all
+    processedAll
       .withColumn("rn", monotonically_increasing_id())
       .filter(col("rn") >= offset)
       .limit(limit)
@@ -44,7 +50,6 @@ object DataMartServer {
   val route =
     pathPrefix("api") {
       concat(
-
         /* health-check */
         path("health") {
           get { complete("""{"status":"OK"}""") }
@@ -52,7 +57,7 @@ object DataMartServer {
 
         /* предобработанные данные */
         path("processed-data") {
-          parameters("offset".as[Long].?(0L), "limit".as[Int].?(10000)) { (offset, limit) =>
+          parameters("offset".as[Long].?(0L), "limit".as[Int].?(100000)) { (offset, limit) =>
             get {
               val slice  = processedSlice(offset, limit)
               val entity = HttpEntity.Chunked.fromData(
@@ -85,7 +90,9 @@ object DataMartServer {
 
     sys.addShutdownHook {
       binding.flatMap(_.unbind()).onComplete { _ =>
-        DataMart.stop(); system.terminate()
+        processedAll.unpersist()
+        DataMart.stop()
+        system.terminate()
       }
     }
   }
