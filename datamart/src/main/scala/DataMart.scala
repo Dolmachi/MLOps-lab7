@@ -13,10 +13,13 @@ object DataMart {
     .appName("DataMart")
     .master("local[*]")
     .config("spark.mongodb.connection.uri", mongoUri)
+    .config("spark.sql.shuffle.partitions", "50")
+    .config("spark.default.parallelism", "50")
+    .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
     .config("spark.mongodb.read.partitioner",
-      "com.mongodb.spark.sql.connector.read.partitioner.MongoSamplePartitioner"
+      "com.mongodb.spark.sql.connector.read.partitioner.PaginateBySizePartitioner"
     )
-    .config("spark.mongodb.read.partitionerOptions.partitionSizeMB", "256")
+    .config("spark.mongodb.read.partitioner.options.partition.size", "256")
     .config("spark.mongodb.read.sql.pipeline.includeFiltersAndProjections", "true")
     .config("spark.mongodb.read.pushdown.enabled", "false")
     .config("spark.executor.memory", "8g")

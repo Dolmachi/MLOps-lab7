@@ -1,7 +1,6 @@
 FROM openjdk:17-jdk-slim
 
-# ───── ставим curl + gpg и сам sbt (через бинарный .tgz) ───────────
-ARG SBT_VERSION=1.9.8          # можно обновить при желании
+ARG SBT_VERSION=1.9.8
 RUN apt-get update \
  && apt-get install -y --no-install-recommends curl gnupg \
  && rm -rf /var/lib/apt/lists/* \
@@ -9,23 +8,19 @@ RUN apt-get update \
       | tar -xz -C /opt \
  && ln -s /opt/sbt/bin/sbt /usr/local/bin/sbt
 
-# ───── рабочая директория проекта ──────────────────────────────────
 WORKDIR /app/datamart
 
-# копируем только каталог vitрины, чтобы не тянуть в образ весь repo
 COPY datamart/ .
 
-# при желании — можем подкрутить память для сборки
 ENV SBT_OPTS="-Xms512m -Xmx2048m -XX:MaxMetaspaceSize=512m"
 
-# ───── сборка fat-jar ──────────────────────────────────────────────
 RUN sbt clean assembly
 
-# ───── запуск ──────────────────────────────────────────────────────
 CMD ["java", \
      "--add-exports=java.base/sun.nio.ch=ALL-UNNAMED", \
      "--add-opens=java.base/java.nio=ALL-UNNAMED", \
      "--add-opens=java.base/java.lang.invoke=ALL-UNNAMED", \
      "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED", \
+     "--add-opens=java.util=ALL-UNNAMED", \
      "-cp", "target/scala-2.12/DataMart-assembly-1.0.jar", \
      "DataMartServer"]
