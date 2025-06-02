@@ -62,17 +62,17 @@ object DataMart {
         .na.drop("all", nutrientCols)
         .na.fill(0.0, nutrientCols)
 
-      val medianAggs: Array[Column] = nutrientCols.map { c =>
+      // Изменяем тип на Seq[Column] и используем head/tail
+      val medianAggs: Seq[Column] = nutrientCols.map { c =>
         percentile_approx(col(c), lit(0.5), lit(1000)).alias(c)
       }
 
-      val medianVals: Array[Double] =
-        processed
-          .agg(medianAggs: _*)
-          .first()
-          .toSeq
-          .map(_.asInstanceOf[Double])
-          .toArray
+      val medianVals: Array[Double] = processed
+        .agg(medianAggs.head, medianAggs.tail: _*) // Передаем первый элемент отдельно, остальное распаковываем
+        .first()
+        .toSeq
+        .map(_.asInstanceOf[Double])
+        .toArray
 
       val medians: Map[String, Double] =
         nutrientCols.zip(medianVals).toMap
