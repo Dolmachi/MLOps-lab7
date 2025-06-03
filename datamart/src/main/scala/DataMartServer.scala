@@ -9,8 +9,8 @@ import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.generic.auto._
 import org.apache.logging.log4j.{LogManager, Logger}
 import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.functions.{col, monotonically_increasing_id}
-import org.apache.spark.storage.StorageLevel 
+import org.apache.spark.sql.functions.{col, spark_partition_id}
+import org.apache.spark.storage.StorageLevel
 import scala.jdk.CollectionConverters._
 import akka.NotUsed
 
@@ -29,29 +29,30 @@ object DataMartServer {
 
   /* ───── helpers ─────────────────────────────────────────────── */
 
+  private val numPartitions = 30 // Разбиваем на 30 партиций (~100 000 строк в каждой)
+
   private val processedAll: DataFrame = {
     val base = DataMart.preprocessData(DataMart.getRawData)
-      .withColumn("rn", monotonically_increasing_id())
+      .repartition(numPartitions) // Разбиваем на 30 партиций
       .persist(StorageLevel.MEMORY_AND_DISK)
-
-    val n = base.count()
-    logger.info(s"Cached dataset, rows = $n")
-    
+    println(s"⇢ Cached dataset, rows = ${base.count()}")
     base
   }
 
-  /** Потоково превращает DataFrame → JSON-массив `[row1,row2,…]` */
+  private val processedAllWithPartitions = processedAll
+    .withColumn("partitionIndex", spark_partition_id()) // Добавляем столбец с номером партиции
+
   private def jsonStream(df: DataFrame): Source[ByteString, NotUsed] =
     Source
       .fromIterator(() => df.toJSON.toLocalIterator().asScala)
       .map(ByteString(_))
       .intersperse(ByteString("["), ByteString(","), ByteString("]"))
 
-  /** Берём «окно» данных без collect() */
-  private def processedSlice(offset: Long, limit: Int): DataFrame =
-    processedAll
-      .filter(col("rn") >= offset && col("rn") < offset + limit)
-      .drop("rn")
+  private def processedSlice(partitionIndex: Int): DataFrame = {
+    processedAllWithPartitions
+      .where(col("partitionIndex") === partitionIndex)
+      .drop("partitionIndex") // Убираем временный столбец
+  }
 
   /* ───── routes ──────────────────────────────────────────────── */
 
@@ -65,13 +66,13 @@ object DataMartServer {
 
         /* предобработанные данные */
         path("processed-data") {
-          parameters("offset".as[Long].?(0L), "limit".as[Int].?(100000)) { (offset, limit) =>
+          parameters("partitionIndex".as[Int]) { partitionIndex =>
             get {
-              val slice  = processedSlice(offset, limit)
+              val slice = processedSlice(partitionIndex)
               val entity = HttpEntity.Chunked.fromData(
-                              ContentTypes.`application/json`,
-                              jsonStream(slice)
-                           )
+                ContentTypes.`application/json`,
+                jsonStream(slice)
+              )
               complete(entity)
             }
           }

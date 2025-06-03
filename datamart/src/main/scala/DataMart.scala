@@ -26,13 +26,13 @@ object DataMart {
     .config("spark.executor.cores",  "4")
     .config("spark.driver.memory",   "6g")
     .config("spark.driver.memoryOverhead",  "2g")
-    .config("spark.memory.storageFraction", "0.3")
+    .config("spark.memory.storageFraction", "0.5")
     .config("spark.mongodb.schema.sampleSize", "200")
     .getOrCreate()
 
   def getRawData: DataFrame = {
     try {
-      logger.info("Чтение данных из MongoDB: products_database.products")
+      println("Чтение данных из MongoDB: products_database.products")
       val df = spark.read
         .format("mongodb")
         .option("uri", mongoUri)
@@ -40,22 +40,20 @@ object DataMart {
         .option("collection", "products_raw")
         .load()
 
-      val wanted: Seq[Column] = Seq(col("_id")) ++
-        df.columns.filter(_.endsWith("_100g")).map(col)
+      val wanted: Seq[Column] = Seq(col("_id")) ++ df.columns.filter(_.endsWith("_100g")).map(col)
       df.select(wanted: _*)
     } catch {
       case e: Exception =>
-        logger.error(s"Ошибка при чтении данных из MongoDB: ${e.getMessage}", e)
+        println(s"Ошибка при чтении данных из MongoDB: ${e.getMessage}", e)
         throw e
     }
   }
 
   def preprocessData(rawDF: DataFrame): DataFrame = {
     try {
-      logger.info("Начало предобработки данных...")
+      println("Начало предобработки данных...")
 
-      val nutrientCols: Array[String] =
-        rawDF.columns.filter(_.endsWith("_100g"))
+      val nutrientCols: Array[String] = rawDF.columns.filter(_.endsWith("_100g"))
 
       val casted: DataFrame = nutrientCols.foldLeft(rawDF) { case (df, c) =>
         df.withColumn(c, col(c).cast(DoubleType))
@@ -65,20 +63,17 @@ object DataMart {
         .na.drop("all", nutrientCols)
         .na.fill(0.0, nutrientCols)
 
-      // Изменяем тип на Seq[Column] и используем head/tail
       val medianAggs: Seq[Column] = nutrientCols.map { c =>
         percentile_approx(col(c), lit(0.5), lit(1000)).alias(c)
       }
-
       val medianVals: Array[Double] = processed
-        .agg(medianAggs.head, medianAggs.tail: _*) // Передаем первый элемент отдельно, остальное распаковываем
+        .agg(medianAggs.head, medianAggs.tail: _*)
         .first()
         .toSeq
         .map(_.asInstanceOf[Double])
         .toArray
 
-      val medians: Map[String, Double] =
-        nutrientCols.zip(medianVals).toMap
+      val medians: Map[String, Double] = nutrientCols.zip(medianVals).toMap
 
       nutrientCols.foreach { c =>
         processed = processed.withColumn(
@@ -88,7 +83,7 @@ object DataMart {
         )
       }
 
-      logger.info("Предобработка завершена")
+      println("Предобработка завершена")
       processed
     } catch {
       case e: Exception =>
@@ -99,7 +94,7 @@ object DataMart {
 
   def savePredictions(predictionsDF: DataFrame): Unit = {
     try {
-      logger.info("Сохранение предсказаний в MongoDB: products_database.products_clusters")
+      println("Сохранение предсказаний в MongoDB: products_database.products_clusters")
       predictionsDF.write
         .format("mongodb")
         .mode("append")
@@ -107,16 +102,16 @@ object DataMart {
         .option("database", "products_database")
         .option("collection", "products_clusters")
         .save()
-      logger.info("Предсказания успешно сохранены")
+      println("Предсказания успешно сохранены")
     } catch {
       case e: Exception =>
-        logger.error(s"Ошибка при сохранении предсказаний: ${e.getMessage}", e)
+        println(s"Ошибка при сохранении предсказаний: ${e.getMessage}", e)
         throw e
     }
   }
 
   def stop(): Unit = {
-    logger.info("Остановка Spark-сессии")
+    println("Остановка Spark-сессии")
     spark.stop()
   }
 }
