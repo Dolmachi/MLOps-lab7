@@ -12,6 +12,7 @@ object DataMart {
   val spark: SparkSession = SparkSession.builder()
     .appName("DataMart")
     .master("local[*]")
+    .config("spark.ui.port", "4041")
     .config("spark.mongodb.connection.uri", mongoUri)
     .config("spark.sql.shuffle.partitions", "50")
     .config("spark.default.parallelism", "50")

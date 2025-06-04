@@ -26,7 +26,7 @@ class InferenceJob:
             self.send_to_datamart(preds_df)
             self.current_partition += 1
             self.log.info(f"Отправлено {batch} порций")
-
+        
         self.pred.stop()
         self.log.info("Работа завершена")
 

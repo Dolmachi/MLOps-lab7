@@ -35,7 +35,7 @@ object DataMartServer {
     val base = DataMart.preprocessData(DataMart.getRawData)
       .repartition(numPartitions) // Разбиваем на 30 партиций
       .persist(StorageLevel.MEMORY_AND_DISK)
-    println(s"⇢ Cached dataset, rows = ${base.count()}")
+    println(s"⇢ Кэшированный датасет, кол-во записей = ${base.count()}")
     base
   }
 
@@ -94,9 +94,6 @@ object DataMartServer {
   /* ───── main ───────────────────────────────────────────────── */
 
   def main(args: Array[String]): Unit = {
-    val n = processedAll.count()
-    println(s"⇢ Cached dataset, rows = $n")
-
     val binding = Http().newServerAt("0.0.0.0", 8080).bind(route)
     println("⇢ DataMart-API запущен: http://0.0.0.0:8080/api")
 

@@ -10,6 +10,8 @@ services:
         condition: service_healthy
       datamart:
         condition: service_healthy
+    ports:
+    - "4040:4040"
 
   datamart:
     build:
@@ -24,6 +26,7 @@ services:
         condition: service_healthy
     ports:
     - "8080:8080"
+    - "4041:4041"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
       interval: 10s
