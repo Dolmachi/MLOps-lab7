@@ -9,6 +9,7 @@ object DataMart {
   private val mongoUri =
     "mongodb://user:12345@mongodb:27017/products_database?authSource=admin"
 
+  /*спарк процесс*/ 
   val spark: SparkSession = SparkSession.builder()
     .appName("DataMart")
     .master("local[*]")
@@ -31,6 +32,7 @@ object DataMart {
     .config("spark.mongodb.schema.sampleSize", "200")
     .getOrCreate()
 
+  /*считывание данных из монго*/ 
   def getRawData: DataFrame = {
     try {
       println("Чтение данных из MongoDB: products_database.products")
@@ -50,6 +52,7 @@ object DataMart {
     }
   }
 
+  /*препроцесс данных*/ 
   def preprocessData(rawDF: DataFrame): DataFrame = {
     try {
       println("Начало предобработки данных...")
@@ -93,6 +96,7 @@ object DataMart {
     }
   }
 
+  /*сохранение предсказаний в монго*/ 
   def savePredictions(predictionsDF: DataFrame): Unit = {
     try {
       println("Сохранение предсказаний в MongoDB: products_database.products_clusters")

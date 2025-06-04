@@ -1,4 +1,3 @@
-// --------------------------- build.sbt ---------------------------
 name := "DataMart"
 version := "1.0"
 scalaVersion := "2.12.18"
@@ -49,16 +48,8 @@ mainClass in Compile := Some("DataMartServer")
 import sbtassembly.AssemblyPlugin.defaultUniversalScript
 
 assembly / assemblyMergeStrategy := {
-  /*
-   * Важно: не выбрасываем service-descriptors во всех подпапках
-   * META-INF/services — Spark по ним регистрирует DataSource’ы
-   */
   case PathList("META-INF", "services", _ @_*)     => MergeStrategy.concat
-
-  // остальные файлы META-INF можно удалить
   case PathList("META-INF", _ @_*)                 => MergeStrategy.discard
-
-  // правила, которые уже были
   case "reference.conf" | "application.conf"       => MergeStrategy.concat
   case x if x.endsWith(".proto")                   => MergeStrategy.first
   case x if x.endsWith(".properties")              => MergeStrategy.first
